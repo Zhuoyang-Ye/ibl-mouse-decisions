@@ -70,6 +70,31 @@ conda activate ibl
 python ibl_explorer.py                       # or: python ibl_explorer.py other_trials.csv
 ```
 
+### On Windows
+
+**Without Python:** use the built app. Download **IBL-Explorer-windows** from
+the latest run of the
+[windows-app workflow](https://github.com/Zhuoyang-Ye/ibl-mouse-decisions/actions/workflows/windows-app.yml)
+(open the run, then *Artifacts*), or from a
+[Release](https://github.com/Zhuoyang-Ye/ibl-mouse-decisions/releases) if
+there is one. Unzip it anywhere and double-click `IBL Explorer.exe`.
+
+- The 40-session CSV is built in, and the download panel works as on a Mac
+  (downloads are cached in `%USERPROFILE%\Downloads\ONE`).
+- The app isn't code-signed, so the first launch may show "Windows protected
+  your PC": click *More info*, then *Run anyway*.
+- If something goes wrong, the app's log is `%TEMP%\ibl_explorer.log`.
+
+**With Python:** follow Setup in an *Anaconda Prompt*, then run
+`python ibl_explorer.py`.
+
+**A new build:** the workflow runs by itself when the GUI's code changes
+(or from the Actions tab). To publish a version that doesn't expire after
+14 days, push a tag: `git tag v0.2 && git push origin v0.2` attaches a zip
+to a Release. To build locally (PyInstaller can't cross-compile, so do this
+on Windows): `pip install pyinstaller`, then
+`pyinstaller --noconfirm ibl_explorer.spec` creates `dist\IBL Explorer\`.
+
 ## Model it: DNN vs RNN
 
 The pipeline has two stages that hand off through the cached CSV:
@@ -125,15 +150,24 @@ the top of `fetch_ibl_data.py` (`SUBJECT`, `MAX_SESSIONS`) and re-run it. Any
 IBL subject with the `biasedChoiceWorld` task protocol works. Everything
 downstream just reads a trials CSV and doesn't care where it came from.
 
+## IBL database login
+
+Downloads (the fetch script and the GUI's download panel) use the IBL's
+shared read-only account. The IBL plans to retire it; to use your own free
+[OpenAlyx account](https://openalyx.internationalbrainlab.org/signup), set
+`IBL_ALYX_USERNAME` and `IBL_ALYX_PASSWORD` before starting either one. The
+data in the repo doesn't need a login.
+
 ## Tests
 
 ```bash
 pytest                                       # torch env: models + analysis (~2 s, synthetic data)
-pytest tests/test_ibl_analysis.py tests/test_ibl_explorer.py   # ibl env: analysis + GUI smoke test
+pytest tests/test_fetch.py tests/test_ibl_analysis.py tests/test_ibl_explorer.py   # ibl env
 ```
 
-The GUI test skips itself where PyQt5/ONE-api aren't installed. GitHub
-Actions runs the torch-env suite on every push.
+The fetch and GUI tests skip themselves where ONE-api/PyQt5 aren't
+installed. GitHub Actions runs the torch-env suite on every push, and the
+windows-app workflow checks that the built app starts and draws.
 
 ## Repository layout
 
@@ -142,11 +176,13 @@ Actions runs the torch-env suite on every push.
 | `fetch_ibl_data.py` | Downloads trials from OpenAlyx into `data/ibl_trials.csv` (also used by the GUI) |
 | `ibl_analysis.py` | Plotting-free analysis functions shared by the notebook and the GUI |
 | `explore_ibl_data.ipynb` | Exploration notebook (saved with outputs) |
-| `ibl_explorer.py` | Desktop GUI |
+| `ibl_explorer.py` | Desktop GUI (`--smoke-test` draws every tab and exits) |
+| `ibl_explorer.spec` | PyInstaller recipe for the standalone app |
 | `rnn_vs_dnn_ibl.py` | DNN vs RNN models and the figure |
 | `data/ibl_trials.csv` | 37,546 trials from 40 sessions (see [DATA_LICENSE.md](DATA_LICENSE.md)) |
 | `requirements-ibl.txt` / `requirements.txt` | The `ibl` env / the torch env |
 | `tests/` | pytest suite; `conftest.py` puts the repo root on the import path |
+| `.github/workflows/` | `tests.yml` (pytest on every push), `windows-app.yml` (builds the Windows app) |
 
 ## Practice exercises
 

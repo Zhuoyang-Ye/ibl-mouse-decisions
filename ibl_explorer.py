@@ -8,6 +8,9 @@ Run it in the `ibl` conda env (PyQt5 and pyqtgraph come with ibllib):
     python ibl_explorer.py               # from the repo root; opens data/ibl_trials.csv
     python ibl_explorer.py other.csv     # any CSV written by fetch_ibl_data.py
 
+On Windows without Python, use the built app instead ("IBL Explorer.exe",
+see the README); ibl_explorer.spec is its PyInstaller recipe.
+
 LEFT PANEL
   Data      open/save a trials CSV, or download any subject's sessions from
             the public IBL database (same code path as fetch_ibl_data.py)
@@ -29,9 +32,21 @@ right-click -> "View All" to reset. All numbers come from ibl_analysis.py,
 the same code explore_ibl_data.ipynb uses.
 """
 
+import argparse
 import sys
+import tempfile
 import traceback
 from pathlib import Path
+
+# A windowed build (PyInstaller, console=False) has no console, so
+# sys.stdout/stderr are None and anything that prints -- tracebacks, ONE's
+# download progress bars, logging set up at import time -- would crash.
+# Send it to a log file instead. Must run before importing ONE.
+LOG_PATH = Path(tempfile.gettempdir()) / "ibl_explorer.log"
+if sys.stdout is None or sys.stderr is None:
+    _log = open(LOG_PATH, "w", buffering=1, encoding="utf-8")
+    sys.stdout = sys.stdout or _log
+    sys.stderr = sys.stderr or _log
 
 import numpy as np
 import pandas as pd
@@ -41,8 +56,11 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 import fetch_ibl_data as fetch
 import ibl_analysis as ia
 
-HERE = Path(__file__).parent
+FROZEN = getattr(sys, "frozen", False)  # running as the PyInstaller-built app
+HERE = Path(__file__).parent            # in the built app: its bundled-files folder
 DEFAULT_CSV = HERE / "data" / "ibl_trials.csv"
+# Open/Save dialogs start in the repo's data folder, or the home folder for the app
+DIALOG_DIR = Path.home() if FROZEN else DEFAULT_CSV.parent
 C = ia.COLORS
 CONTRAST_LEVELS = [0.0, 0.0625, 0.125, 0.25, 1.0]
 MAX_CONTRAST_CHOICES = [
@@ -487,13 +505,13 @@ class Explorer(QtWidgets.QMainWindow):
     # ---------------------------------------------------------- data loading
     def open_csv_dialog(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open trials CSV", str(DEFAULT_CSV.parent), "CSV files (*.csv)")
+            self, "Open trials CSV", str(DIALOG_DIR), "CSV files (*.csv)")
         if path:
             self.load_csv(Path(path))
 
     def save_csv_dialog(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Save trials CSV", str(DEFAULT_CSV.parent / "trials.csv"), "CSV files (*.csv)")
+            self, "Save trials CSV", str(DIALOG_DIR / "trials.csv"), "CSV files (*.csv)")
         if path:
             self.raw.to_csv(path, index=False)
             self.statusBar().showMessage(f"Saved {len(self.raw):,} trials to {path}")
@@ -919,10 +937,44 @@ class Explorer(QtWidgets.QMainWindow):
         self.table.resizeColumnsToContents()
 
 
+def smoke_test(window, app, online):
+    """Draw every tab (and optionally query OpenAlyx), then report.
+    Used to check a fresh build; returns the process exit code."""
+    errors = []
+    sys.excepthook = lambda *exc: errors.append("".join(traceback.format_exception(*exc)))
+    if window.data is None:
+        errors.append(f"no data loaded from {DEFAULT_CSV}")
+    else:
+        for i in range(window.tabs.count()):
+            window.tabs.setCurrentIndex(i)
+            app.processEvents()
+        print(f"Drew {window.tabs.count()} tabs from {len(window.data):,} trials")
+    if online:
+        try:
+            sessions = fetch.find_sessions(fetch.connect(), fetch.SUBJECT)
+            print(f"OpenAlyx: found {len(sessions)} sessions for {fetch.SUBJECT}")
+        except Exception:
+            errors.append(traceback.format_exc())
+    print(f"Smoke test {'FAILED' if errors else 'passed'}")
+    for e in errors:
+        print(e)
+    return 1 if errors else 0
+
+
 def main():
+    parser = argparse.ArgumentParser(description="IBL trial explorer")
+    parser.add_argument("csv", nargs="?", type=Path, default=DEFAULT_CSV,
+                        help="trials CSV (default: the bundled data/ibl_trials.csv)")
+    parser.add_argument("--smoke-test", action="store_true",
+                        help="draw every tab, print a report and exit (for checking a build)")
+    parser.add_argument("--online", action="store_true",
+                        help="with --smoke-test: also query the IBL database")
+    args = parser.parse_args()
+
     app = pg.mkQApp("IBL trial explorer")
-    csv = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_CSV
-    window = Explorer(csv)
+    window = Explorer(args.csv)
+    if args.smoke_test:
+        sys.exit(smoke_test(window, app, args.online))
 
     # PyQt5 aborts on an exception escaping a slot; report it instead.
     def excepthook(*exc_info):

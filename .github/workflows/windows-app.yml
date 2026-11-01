@@ -1,0 +1,93 @@
+name: windows-app
+
+# Builds the GUI as a standalone Windows app ("IBL Explorer.exe", no Python
+# needed), checks that the built app starts and draws every tab, and uploads
+# it. Runs on demand, when the GUI's code changes, and for version tags
+# (v0.2, ...), which also attach a zip of the app to a GitHub Release.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ibl_explorer.py
+      - ibl_analysis.py
+      - fetch_ibl_data.py
+      - ibl_explorer.spec
+      - requirements-ibl.txt
+      - data/ibl_trials.csv
+      - .github/workflows/windows-app.yml
+  push:
+    branches: [main]
+    tags: ["v*"]  # path filters don't apply to tag pushes
+    paths:
+      - ibl_explorer.py
+      - ibl_analysis.py
+      - fetch_ibl_data.py
+      - ibl_explorer.spec
+      - requirements-ibl.txt
+      - data/ibl_trials.csv
+      - .github/workflows/windows-app.yml
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write  # to attach the zip to a release on version tags
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ibl.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ibl.txt pyinstaller
+
+      - name: Build the app
+        run: pyinstaller --noconfirm ibl_explorer.spec
+
+      # The app is windowed (no console), so it writes its output to
+      # %TEMP%\ibl_explorer.log; Start-Process gives us its exit code.
+      - name: Smoke test the built app
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process -FilePath "dist\IBL Explorer\IBL Explorer.exe" -ArgumentList "--smoke-test" -PassThru
+          $null = $p.Handle  # keeps ExitCode readable after the process exits
+          if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "the app did not exit within 5 minutes" }
+          Get-Content "$env:TEMP\ibl_explorer.log" -ErrorAction SilentlyContinue
+          exit $p.ExitCode
+
+      # Required: this is what catches login changes on a fresh machine. If
+      # OpenAlyx itself is down, re-run the job later.
+      - name: Smoke test the IBL database connection
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process -FilePath "dist\IBL Explorer\IBL Explorer.exe" -ArgumentList "--smoke-test", "--online" -PassThru
+          $null = $p.Handle
+          if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "the app did not exit within 5 minutes" }
+          Get-Content "$env:TEMP\ibl_explorer.log" -ErrorAction SilentlyContinue
+          exit $p.ExitCode
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: IBL-Explorer-windows
+          path: dist/IBL Explorer
+          retention-days: 14  # private repos have limited artifact storage
+
+      - name: Attach a zip to a GitHub Release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Compress-Archive -Path "dist\IBL Explorer" -DestinationPath "IBL-Explorer-windows.zip"
+          gh release create "${{ github.ref_name }}" IBL-Explorer-windows.zip --title "${{ github.ref_name }}" --generate-notes
