@@ -64,3 +64,17 @@ def test_session_with_one_file_per_attribute():
 def test_session_without_trials_gives_a_clear_error():
     with pytest.raises(ValueError, match="no trials data"):
         fetch.load_session_trials(FakeOne(["alf/_ibl_wheel.position.npy"]), "eid3", 0, "x")
+
+
+def test_connect_uses_public_account_unless_env_vars_are_set(monkeypatch):
+    calls = []
+    monkeypatch.setattr(fetch, "ONE", lambda **kwargs: calls.append(kwargs))
+    monkeypatch.delenv("IBL_ALYX_USERNAME", raising=False)
+    fetch.connect()
+    # a fresh install needs the username passed explicitly
+    assert (calls[-1]["username"], calls[-1]["password"]) == (fetch.PUBLIC_USERNAME,
+                                                               fetch.PUBLIC_PASSWORD)
+    monkeypatch.setenv("IBL_ALYX_USERNAME", "me")
+    monkeypatch.setenv("IBL_ALYX_PASSWORD", "secret")
+    fetch.connect()
+    assert (calls[-1]["username"], calls[-1]["password"]) == ("me", "secret")

@@ -46,6 +46,7 @@ It prints progress to the console and writes `data/ibl_trials.csv` next to
 this script. Safe to re-run; it just overwrites the cache.
 """
 
+import os
 import time
 from pathlib import Path
 
@@ -54,6 +55,10 @@ import pandas as pd
 from one.api import ONE
 
 OPENALYX_URL = "https://openalyx.internationalbrainlab.org"
+# The IBL's shared read-only account. Newer ONE-api versions no longer fill
+# it in by themselves, and the IBL plans to retire it: to use your own (free)
+# account, set IBL_ALYX_USERNAME and IBL_ALYX_PASSWORD.
+PUBLIC_USERNAME, PUBLIC_PASSWORD = "intbrainlab", "international"
 SUBJECT = "ibl_witten_12"
 PROJECT = "ibl_neuropixel_brainwide_01"
 TASK_PROTOCOL = "biasedChoiceWorld"
@@ -77,8 +82,14 @@ KEEP_COLUMNS = [
 
 
 def connect():
-    """Anonymous read-only connection to the public IBL database."""
-    return ONE(base_url=OPENALYX_URL, password="international", silent=True)
+    """Read-only connection to the public IBL database, with the account in
+    IBL_ALYX_USERNAME / IBL_ALYX_PASSWORD if set, else the shared one."""
+    username = os.environ.get("IBL_ALYX_USERNAME")
+    if username:
+        password = os.environ.get("IBL_ALYX_PASSWORD")
+    else:
+        username, password = PUBLIC_USERNAME, PUBLIC_PASSWORD
+    return ONE(base_url=OPENALYX_URL, username=username, password=password, silent=True)
 
 
 def find_sessions(one, subject, task_protocol=TASK_PROTOCOL, project=PROJECT):

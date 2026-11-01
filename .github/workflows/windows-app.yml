@@ -64,8 +64,9 @@ jobs:
           Get-Content "$env:TEMP\ibl_explorer.log" -ErrorAction SilentlyContinue
           exit $p.ExitCode
 
+      # Required: this is what catches login changes on a fresh machine. If
+      # OpenAlyx itself is down, re-run the job later.
       - name: Smoke test the IBL database connection
-        continue-on-error: true  # an OpenAlyx outage shouldn't fail the build
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen

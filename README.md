@@ -150,6 +150,14 @@ the top of `fetch_ibl_data.py` (`SUBJECT`, `MAX_SESSIONS`) and re-run it. Any
 IBL subject with the `biasedChoiceWorld` task protocol works. Everything
 downstream just reads a trials CSV and doesn't care where it came from.
 
+## IBL database login
+
+Downloads (the fetch script and the GUI's download panel) use the IBL's
+shared read-only account. The IBL plans to retire it; to use your own free
+[OpenAlyx account](https://openalyx.internationalbrainlab.org/signup), set
+`IBL_ALYX_USERNAME` and `IBL_ALYX_PASSWORD` before starting either one. The
+data in the repo doesn't need a login.
+
 ## Tests
 
 ```bash
