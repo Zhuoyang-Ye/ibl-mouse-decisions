@@ -98,15 +98,25 @@ def load_session_trials(one, eid, session_idx, start_time):
 
     Returns (trials, n_dropped_nogo).
     """
-    # The trials table lives under different "collection" subfolders
-    # depending on which pipeline version processed the session, so we
-    # look up its exact path per-session rather than hardcoding one.
+    # The trials live under different "collection" subfolders depending on
+    # which pipeline version processed the session, so we look up the exact
+    # path per session rather than hardcoding one.
     datasets = one.list_datasets(eid)
-    table_rel_path = next(d for d in datasets if d.endswith("_ibl_trials.table.pqt"))
-    collection = table_rel_path.rsplit("/", 1)[0]
+    tables = [d for d in datasets if d.endswith("_ibl_trials.table.pqt")]
+    if tables:
+        collection = tables[0].rsplit("/", 1)[0]
+        trials = one.load_dataset(eid, "_ibl_trials.table.pqt", collection=collection)
+    else:
+        # Some sessions store each trial attribute as its own .npy file
+        # (_ibl_trials.choice.npy, ...) instead of one table.
+        files = [d for d in datasets if "_ibl_trials." in d]
+        if not files:
+            raise ValueError(f"session {eid} has no trials data")
+        collection = files[0].rsplit("/", 1)[0] if "/" in files[0] else None
+        trials = one.load_object(eid, "trials", collection=collection).to_df()
 
-    trials = one.load_dataset(eid, "_ibl_trials.table.pqt", collection=collection)
-    trials = trials[KEEP_COLUMNS].copy()
+    # Columns a session doesn't have (some lack firstMovement_times) become NaN.
+    trials = trials.reindex(columns=KEEP_COLUMNS)
 
     # choice == 0 means the mouse never responded (a "no-go" / omission
     # trial) -- there's no left/right label to predict, so drop it.

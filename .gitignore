@@ -14,3 +14,7 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# PyInstaller output
+build/
+dist/
