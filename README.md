@@ -1,4 +1,4 @@
-# IBL mouse decisions: explore the data, then model it
+# IBL mouse decisions
 
 Real mouse decision-making data from the [International Brain
 Laboratory](https://www.internationalbrainlab.org) (IBL), used two ways:
