@@ -1,0 +1,6 @@
+# Stage 2: modeling + figure (rnn_vs_dnn_ibl.py). No network needed.
+torch>=2.0
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.7
+pytest>=7

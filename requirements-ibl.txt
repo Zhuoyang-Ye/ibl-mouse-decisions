@@ -1,0 +1,11 @@
+# The `ibl` env: fetch_ibl_data.py plus the exploration tools
+# (explore_ibl_data.ipynb, ibl_explorer.py). Kept separate from torch because
+# ONE-api/ibllib pin versions that can clash with it.
+ONE-api>=3.0
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14
+matplotlib>=3.7
+PyQt5>=5.15
+pyqtgraph>=0.13
+ipykernel>=6
